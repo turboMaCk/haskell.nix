@@ -52,6 +52,9 @@ let self =
 , enableExecutableProfiling ? component.enableExecutableProfiling
 , profilingDetail ? component.profilingDetail
 
+# Coverage
+, doCoverage ? component.doCoverage
+
 # Data
 , enableSeparateDataOutput ? component.enableSeparateDataOutput
 
@@ -117,6 +120,7 @@ let
       (enableFeature enableExecutableProfiling "executable-profiling")
       (enableFeature enableStatic "static")
       (enableFeature enableShared "shared")
+      (enableFeature doCoverage "coverage")
     ] ++ lib.optionals (stdenv.hostPlatform.isMusl && (haskellLib.isExecutableType componentId)) [
       # These flags will make sure the resulting executable is statically linked.
       # If it uses other libraries it may be necessary for to add more
@@ -356,6 +360,11 @@ let
             find "$libdir" -iname '*.dll' -exec ln -s {} $out/bin \;
           fi
         done
+      '')
+      + (lib.optionalString doCoverage ''
+        mkdir -p $out/share
+        cp -r dist/hpc $out/share
+        cp dist/setup-config $out/
       '')
       }
       runHook postInstall

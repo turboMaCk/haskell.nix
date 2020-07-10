@@ -482,14 +482,19 @@ final: prev: {
                               { compiler.nix-name = args.compiler-nix-name; };
                   extra-hackages = args.extra-hackages or [];
                 };
-            in addProjectAndPackageAttrs {
-              inherit (pkg-set.config) hsPkgs;
-              inherit pkg-set;
-              plan-nix = callProjectResults.projectNix;
-              inherit (callProjectResults) index-state;
-              tool = final.buildPackages.haskell-nix.tool pkg-set.config.compiler.nix-name;
-              tools = final.buildPackages.haskell-nix.tools pkg-set.config.compiler.nix-name;
-              roots = final.haskell-nix.roots pkg-set.config.compiler.nix-name;
+
+                project = addProjectAndPackageAttrs rec {
+                  inherit (pkg-set.config) hsPkgs;
+                  inherit pkg-set;
+                  plan-nix = callProjectResults.projectNix;
+                  inherit (callProjectResults) index-state;
+                  tool = final.buildPackages.haskell-nix.tool pkg-set.config.compiler.nix-name;
+                  tools = final.buildPackages.haskell-nix.tools pkg-set.config.compiler.nix-name;
+                  roots = final.haskell-nix.roots pkg-set.config.compiler.nix-name;
+                };
+            in project // {
+              projectCoverageReport = haskellLib.projectCoverageReport { packages = haskellLib.selectProjectPackages project.hsPkgs; };
+              overrideModules = f: cabalProject' (args // { modules = f args.modules; });
             };
 
         # Take `hsPkgs` from the `rawProject` and update all the packages and
@@ -504,13 +509,19 @@ final: prev: {
                   then null
                   else
                     let package = package' // { recurseForDerivations = false; };
-                    in package' // {
+                    in package' // rec {
                       components = final.lib.mapAttrs (n: v:
                         if n == "library" || n == "all"
                           then v // { inherit project package; }
                           else final.lib.mapAttrs (_: c: c // { inherit project package; }) v
                       ) package'.components;
                       inherit project;
+
+                      coverageReport = haskellLib.coverageReport {
+                        inherit (package.identifier) name version;
+                        inherit (components) library;
+                        tests = final.lib.filterAttrs (_: d: d.config.doCheck) components.tests;
+                      };
                     }
                 ) rawProject.hsPkgs
                 // {
@@ -525,7 +536,7 @@ final: prev: {
               args = { caller = "hackage-package"; } // args';
               p = cabalProject' args;
             in p.hsPkgs // {
-              inherit (p) plan-nix index-state tool tools roots;
+              inherit (p) plan-nix index-state tool tools roots projectCoverageReport overrideModules;
               # Provide `nix-shell -A shells.ghc` for users migrating from the reflex-platform.
               # But we should encourage use of `nix-shell -A shellFor`
               shells.ghc = p.hsPkgs.shellFor {};
@@ -543,18 +554,23 @@ final: prev: {
                              ++ (args.modules or [])
                              ++ final.lib.optional (args ? ghc) { ghc.package = args.ghc; };
                 };
-            in addProjectAndPackageAttrs {
-              inherit (pkg-set.config) hsPkgs;
-              inherit pkg-set;
-              stack-nix = callProjectResults.projectNix;
-              tool = final.buildPackages.haskell-nix.tool pkg-set.config.compiler.nix-name;
-              tools = final.buildPackages.haskell-nix.tools pkg-set.config.compiler.nix-name;
-              roots = final.haskell-nix.roots pkg-set.config.compiler.nix-name;
-           };
+
+                project = addProjectAndPackageAttrs {
+                  inherit (pkg-set.config) hsPkgs;
+                  inherit pkg-set;
+                  stack-nix = callProjectResults.projectNix;
+                  tool = final.buildPackages.haskell-nix.tool pkg-set.config.compiler.nix-name;
+                  tools = final.buildPackages.haskell-nix.tools pkg-set.config.compiler.nix-name;
+                  roots = final.haskell-nix.roots pkg-set.config.compiler.nix-name;
+                };
+            in project // {
+              projectCoverageReport = haskellLib.projectCoverageReport { packages = haskellLib.selectProjectPackages project.hsPkgs; };
+              overrideModules = f: stackProject' (args // { modules = f args.modules; });
+            };
 
         stackProject = args: let p = stackProject' args;
             in p.hsPkgs // {
-              inherit (p) stack-nix tool tools roots;
+              inherit (p) stack-nix tool tools roots projectCoverageReport overrideModules;
               # Provide `nix-shell -A shells.ghc` for users migrating from the reflex-platform.
               # But we should encourage use of `nix-shell -A shellFor`
               shells.ghc = p.hsPkgs.shellFor {};
