@@ -1,32 +1,25 @@
+# A project coverage report is a composition of package coverage
+# reports
 { pkgs, lib, haskellLib }:
 
-# List of project packages to generate a coverage report for
-{ packages
-, coverageReportOverrides ? {}
-}:
+# List of coverage reports to accumulate
+coverageReports:
 
 let
-  getPackageCoverageReport = packageName: (coverageReportOverrides."${packageName}" or packages."${packageName}".coverageReport);
-
-  # Create table rows for an project coverage index page that look something like:
+  # Create table rows for a project coverage index page that look something like:
   #
   # | Package          |
   # |------------------|
   # | cardano-shell    |
   # | cardano-launcher |
-  packageTableRows = package: with lib;
-    let
-      testsOnly = filterAttrs (n: d: isDerivation d) package.components.tests;
-      testNames = mapAttrsToList (testName: _: testName) testsOnly;
-    in
-      concatStringsSep "\n" (map (testName:
+  coverageTableRows = coverageReport:
       ''
       <tr>
         <td>
-          <a href="${package.identifier.name}-${package.identifier.version}/hpc_index.html">${package.identifier.name}</href>
+          <a href="${coverageReport.passthru.name}/hpc_index.html">${coverageReport.passthru.name}</href>
         </td>
       </tr>
-      '') testNames);
+      '';
 
   projectIndexHtml = pkgs.writeText "index.html" ''
   <html>
@@ -37,10 +30,10 @@ let
       <table border="1" width="100%">
         <tbody>
           <tr>
-            <th>Package</th>
+            <th>Report</th>
           </tr>
 
-          ${with lib; concatStringsSep "\n" (mapAttrsToList (_ : packageTableRows) packages)}
+          ${with lib; concatStringsSep "\n" (map coverageTableRows coverageReports)}
 
         </tbody>
       </table>
@@ -48,11 +41,9 @@ let
   </html>
   '';
 
-  ghc = let
-    packageList = lib.attrValues packages;
-  in
-    if (builtins.length packageList) > 0
-    then (builtins.head packageList).project.pkg-set.config.ghc.package
+  ghc =
+    if (builtins.length coverageReports) > 0
+    then (builtins.head coverageReports).library.project.pkg-set.config.ghc.package or pkgs.ghc
     else pkgs.ghc;
 
 in pkgs.runCommand "project-coverage-report"
@@ -64,9 +55,9 @@ in pkgs.runCommand "project-coverage-report"
 
     # Find all tix files in each package
     tixFiles=()
-    ${with lib; concatStringsSep "\n" (mapAttrsToList (n: package: ''
-      identifier="${package.identifier.name}-${package.identifier.version}"
-      report=${getPackageCoverageReport n}
+    ${with lib; concatStringsSep "\n" (map (coverageReport: ''
+      identifier="${coverageReport.name}"
+      report=${coverageReport}
       tix="$report/share/hpc/vanilla/tix/$identifier/$identifier.tix"
       if test -f "$tix"; then
         tixFiles+=("$tix")
@@ -76,7 +67,7 @@ in pkgs.runCommand "project-coverage-report"
       cp -R $report/share/hpc/vanilla/mix/* $out/share/hpc/vanilla/mix
       cp -R $report/share/hpc/vanilla/tix/* $out/share/hpc/vanilla/tix
       cp -R $report/share/hpc/vanilla/html/* $out/share/hpc/vanilla/html
-    '') packages)}
+    '') coverageReports)}
 
     if [ ''${#tixFiles[@]} -ne 0 ]; then
       # Create tix file with test run information for all packages

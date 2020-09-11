@@ -492,8 +492,10 @@ final: prev: {
                   tools = final.buildPackages.haskell-nix.tools pkg-set.config.compiler.nix-name;
                   roots = final.haskell-nix.roots pkg-set.config.compiler.nix-name;
                 };
+
+                packageCoverageReports = map (pkg: pkg.coverageReport) (final.lib.attrValues (haskellLib.selectProjectPackages project.hsPkgs));
             in project // {
-              projectCoverageReport = haskellLib.projectCoverageReport { packages = haskellLib.selectProjectPackages project.hsPkgs; };
+              projectCoverageReport = haskellLib.projectCoverageReport packageCoverageReports;
               overrideModules = f: cabalProject' (args // { modules = f args.modules; });
             };
 
@@ -563,8 +565,10 @@ final: prev: {
                   tools = final.buildPackages.haskell-nix.tools pkg-set.config.compiler.nix-name;
                   roots = final.haskell-nix.roots pkg-set.config.compiler.nix-name;
                 };
+
+                packageCoverageReports = map (pkg: pkg.coverageReport) (final.lib.attrValues (haskellLib.selectProjectPackages project.hsPkgs));
             in project // {
-              projectCoverageReport = haskellLib.projectCoverageReport { packages = haskellLib.selectProjectPackages project.hsPkgs; };
+              projectCoverageReport = haskellLib.projectCoverageReport packageCoverageReports;
               overrideModules = f: stackProject' (args // { modules = f args.modules; });
             };
 
