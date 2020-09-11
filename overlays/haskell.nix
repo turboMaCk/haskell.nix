@@ -518,9 +518,9 @@ final: prev: {
                       inherit project;
 
                       coverageReport = haskellLib.coverageReport {
-                        inherit (package.identifier) name version;
+                        name = package.identifier.name + "-" + package.identifier.version;
                         inherit (components) library;
-                        tests = final.lib.filterAttrs (_: d: d.config.doCheck) components.tests;
+                        checks = final.lib.filterAttrs (_: final.lib.isDerivation) (package'.checks);
                       };
                     }
                 ) rawProject.hsPkgs
