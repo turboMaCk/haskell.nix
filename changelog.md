@@ -8,8 +8,6 @@ that will impact users.
   packages to enable coverage for.
 * Added a `doCoverage` flag to the component builder that outputs HPC
   information when coverage is enabled.
-* Added the `overrideModules` library function to make it more
-  ergonomic fo users to enable coverage on existing projects.
 * Added test for coverage.
 
 ## July 21, 2020

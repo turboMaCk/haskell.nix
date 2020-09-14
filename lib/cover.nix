@@ -9,9 +9,6 @@
 }:
 
 let
-  checks' = with lib; mapAttrs (_: check: assert (isDerivation check); check) checks;
-  checksList = lib.attrValues checks';
-
   toBashArray = arr: "(" + (lib.concatStringsSep " " arr) + ")";
 
   # Exclude test modules from tix file. Getting coverage information
@@ -25,24 +22,17 @@ let
   # matter. So a line in your cabal file such as: "main-is: Spec.hs"
   # still generates a "Main.mix" file with the contents: Mix
   # "Spec.hs". Hence we can hardcode the name "Main" here.
-  testModules = lib.foldl' (acc: test: acc ++ test.config.modules) ["Main"] checksList;
+  testModules = lib.foldl' (acc: test: acc ++ test.config.modules) ["Main"] checks;
 
   # Mix information HPC will need.
-  # For libraries, where we copy the mix information from differs from
-  # where HPC should look for the mix files. For tests, they are the
-  # same location.
-  mixInfo = [ { rootDir = "${library}/share/hpc/vanilla/mix"; searchSubDir = "${library.identifier.name}-${library.identifier.version}";}];
-
-  mixDirs = map (info: info.rootDir) mixInfo;
-  mixSearchDirs = map (info: if info.searchSubDir == null then info.rootDir else info.rootDir + "/" + info.searchSubDir) mixInfo;
+  mixDirs = [ "${library}/share/hpc/vanilla/mix/${library.identifier.name}-${library.identifier.version}" ];
 
   ghc = library.project.pkg-set.config.ghc.package;
 
 in pkgs.runCommand (name + "-coverage-report")
   { buildInputs = [ ghc ];
     passthru = {
-      inherit name library;
-      checks = checks';
+      inherit name library checks;
     };
   }
   ''
@@ -96,7 +86,7 @@ in pkgs.runCommand (name + "-coverage-report")
     # Copy over mix files verbatim
     for dir in "''${mixDirs[@]}"; do
       if [ -d "$dir" ]; then
-        cp -R "$dir"/* $out/share/hpc/vanilla/mix/
+        cp -R "$dir"/* $out/share/hpc/vanilla/mix/${name}
       fi
     done
 
@@ -116,20 +106,19 @@ in pkgs.runCommand (name + "-coverage-report")
 
         popd
       fi
-    '') checksList)
+    '') checks)
     }
 
     # Sum tix files to create a tix file with all relevant tix
     # information and markup a HTML report from this info.
     if (( "''${#tixFiles[@]}" > 0 )); then
       local src=${library.src.outPath}
-      local mixSearchDirs=${toBashArray mixSearchDirs}
       local testModules=${toBashArray testModules}
       local sumTixFile="$out/share/hpc/vanilla/tix/${name}/${name}.tix"
       local markupOutDir="$out/share/hpc/vanilla/html/${name}"
 
       sumTix testModules tixFiles "$sumTixFile"
 
-      markup "$src" mixSearchDirs testModules "$markupOutDir" "$sumTixFile"
+      markup "$src" mixDirs testModules "$markupOutDir" "$sumTixFile"
     fi
   ''

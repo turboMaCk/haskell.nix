@@ -496,7 +496,6 @@ final: prev: {
                 packageCoverageReports = map (pkg: pkg.coverageReport) (final.lib.attrValues (haskellLib.selectProjectPackages project.hsPkgs));
             in project // {
               projectCoverageReport = haskellLib.projectCoverageReport packageCoverageReports;
-              overrideModules = f: cabalProject' (args // { modules = f args.modules; });
             };
 
         # Take `hsPkgs` from the `rawProject` and update all the packages and
@@ -522,7 +521,7 @@ final: prev: {
                       coverageReport = haskellLib.coverageReport {
                         name = package.identifier.name + "-" + package.identifier.version;
                         inherit (components) library;
-                        checks = final.lib.filterAttrs (_: final.lib.isDerivation) (package'.checks);
+                        checks = final.lib.filter (final.lib.isDerivation) (final.lib.attrValues package'.checks);
                       };
                     }
                 ) rawProject.hsPkgs
@@ -538,7 +537,7 @@ final: prev: {
               args = { caller = "hackage-package"; } // args';
               p = cabalProject' args;
             in p.hsPkgs // {
-              inherit (p) plan-nix index-state tool tools roots projectCoverageReport overrideModules;
+              inherit (p) plan-nix index-state tool tools roots projectCoverageReport;
               # Provide `nix-shell -A shells.ghc` for users migrating from the reflex-platform.
               # But we should encourage use of `nix-shell -A shellFor`
               shells.ghc = p.hsPkgs.shellFor {};
@@ -569,12 +568,11 @@ final: prev: {
                 packageCoverageReports = map (pkg: pkg.coverageReport) (final.lib.attrValues (haskellLib.selectProjectPackages project.hsPkgs));
             in project // {
               projectCoverageReport = haskellLib.projectCoverageReport packageCoverageReports;
-              overrideModules = f: stackProject' (args // { modules = f args.modules; });
             };
 
         stackProject = args: let p = stackProject' args;
             in p.hsPkgs // {
-              inherit (p) stack-nix tool tools roots projectCoverageReport overrideModules;
+              inherit (p) stack-nix tool tools roots projectCoverageReport;
               # Provide `nix-shell -A shells.ghc` for users migrating from the reflex-platform.
               # But we should encourage use of `nix-shell -A shellFor`
               shells.ghc = p.hsPkgs.shellFor {};

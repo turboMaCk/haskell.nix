@@ -10,17 +10,15 @@ let
       # Package has no exposed modules which causes
       #   haddock: No input file(s)
       packages.bytestring-builder.doHaddock = false;
+
+      # Coverage
+      packages.pkga.components.library.doCoverage = true;
+      packages.pkgb.components.library.doCoverage = true;
     }];
   };
 
-  overrideFn = oldModules: (oldModules ++ [{
-    packages.pkga.components.library.doCoverage = true;
-    packages.pkgb.components.library.doCoverage = true;
-    packages.pkgb.components.tests.tests.doCoverage = true;
-  }]);
-
-  cabalProj = (cabalProject' projectArgs).overrideModules(overrideFn);
-  stackProj = (stackProject' projectArgs).overrideModules(overrideFn);
+  cabalProj = (cabalProject' projectArgs);
+  stackProj = (stackProject' projectArgs);
 
 in recurseIntoAttrs ({
   run = stdenv.mkDerivation {
@@ -91,7 +89,6 @@ in recurseIntoAttrs ({
         fileExistsNonEmpty "$libTix"
         findFileExistsNonEmpty "$pkgb_basedir/mix/pkgb-0.1.0.0/" "ConduitExample.mix"
         findFileExistsNonEmpty "$pkgb_basedir/mix/pkgb-0.1.0.0/" "PkgB.mix"
-        fileExistsNonEmpty "$pkgb_basedir/mix/tests/Main.mix"
         fileExistsNonEmpty "$pkgb_basedir/html/pkgb-0.1.0.0/hpc_index.html"
   
         filesizeTestsTix=$(command stat --format '%s' "$testTix")
@@ -108,7 +105,6 @@ in recurseIntoAttrs ({
         dirExists "$project_basedir/html/pkgb-0.1.0.0"
         dirExists "$project_basedir/mix/pkga-0.1.0.0"
         dirExists "$project_basedir/mix/pkgb-0.1.0.0"
-        dirExists "$project_basedir/mix/tests"
         dirExists "$project_basedir/tix/all"
         dirExists "$project_basedir/tix/pkga-0.1.0.0"
         dirExists "$project_basedir/tix/pkgb-0.1.0.0"
