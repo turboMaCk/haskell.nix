@@ -97,12 +97,12 @@ in pkgs.runCommand (name + "-coverage-report")
         pushd ${check}/share/hpc/vanilla/tix
 
         tixFile="$(find . -iwholename "*.tix" -type f -print -quit)"
-        local newTixFile=$out/share/hpc/vanilla/tix/"$tixFile"
+        local newTixFile=$out/share/hpc/vanilla/tix/${name}/"$tixFile"
 
         mkdir -p "$(dirname $newTixFile)"
         cp "$tixFile" "$newTixFile"
 
-        tixFiles+=("${check}/share/hpc/vanilla/tix/$tixFile")
+        tixFiles+=("$newTixFile")
 
         popd
       fi

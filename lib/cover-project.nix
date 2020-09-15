@@ -63,10 +63,10 @@ in pkgs.runCommand "project-coverage-report"
         tixFiles+=("$tix")
       fi
 
-      # Copy mix and tix information over from each report
-      cp -R $report/share/hpc/vanilla/mix/* $out/share/hpc/vanilla/mix
-      cp -R $report/share/hpc/vanilla/tix/* $out/share/hpc/vanilla/tix
-      cp -R $report/share/hpc/vanilla/html/* $out/share/hpc/vanilla/html
+      # Copy mix, tix, and html information over from each report
+      cp -R $report/share/hpc/vanilla/mix/* $out/share/hpc/vanilla/mix/
+      cp -R $report/share/hpc/vanilla/tix/* $out/share/hpc/vanilla/tix/
+      cp -R $report/share/hpc/vanilla/html/* $out/share/hpc/vanilla/html/
     '') coverageReports)}
 
     if [ ''${#tixFiles[@]} -ne 0 ]; then
