@@ -1,4 +1,4 @@
-{ lib, haskellLib, pkgs }:
+{ stdenv, lib, haskellLib, pkgs }:
 
 # Name of the coverage report, which should be unique
 { name
@@ -30,11 +30,20 @@ let
   ghc = library.project.pkg-set.config.ghc.package;
 
 in pkgs.runCommand (name + "-coverage-report")
-  { buildInputs = [ ghc ];
+  ({ buildInputs = [ ghc ];
     passthru = {
       inherit name library checks;
     };
-  }
+    # HPC will fail if the Haskell file contains non-ASCII characters,
+    # unless our locale is set correctly. This has been fixed, but we
+    # don't know what version of HPC we will be using, hence we should
+    # always use the workaround.
+    # https://gitlab.haskell.org/ghc/ghc/-/issues/17073
+    LANG = "en_US.UTF-8";
+    LC_ALL = "en_US.UTF-8";
+  } // lib.optionalAttrs (stdenv.buildPlatform.libc == "glibc") {
+    LOCALE_ARCHIVE = "${pkgs.buildPackages.glibcLocales}/lib/locale/locale-archive";
+  })
   ''
     function markup() {
       local srcDir=$1

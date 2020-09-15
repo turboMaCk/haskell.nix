@@ -234,7 +234,7 @@ in {
 
   # Do coverage of a package
   coverageReport = import ./cover.nix {
-    inherit lib haskellLib pkgs;
+    inherit stdenv lib haskellLib pkgs;
   };
 
   # Do coverage of a project
