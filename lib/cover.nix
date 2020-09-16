@@ -6,6 +6,9 @@
 , library
 # List of check derivations that generate coverage
 , checks
+# Should the tests of one local package generate coverage for another
+# local package?
+, crossPollinate ? true
 }:
 
 let
@@ -24,8 +27,17 @@ let
   # "Spec.hs". Hence we can hardcode the name "Main" here.
   testModules = lib.foldl' (acc: test: acc ++ test.config.modules) ["Main"] checks;
 
-  # Mix information HPC will need.
-  mixDirs = [ "${library}/share/hpc/vanilla/mix/${library.identifier.name}-${library.identifier.version}" ];
+  # Libraries in the project
+  projectLibs = map (pkg: pkg.components.library) (lib.attrValues (haskellLib.selectProjectPackages library.project.hsPkgs));
+
+  # Mix information HPC will need
+  mixDirs =
+    map
+      (l: "${l}/share/hpc/vanilla/mix/${l.identifier.name}-${l.identifier.version}")
+      (if crossPollinate then projectLibs else [library]);
+
+  # Src information HPC will need
+  srcDirs = map (l: l.src.outPath) (if crossPollinate then projectLibs else [library]);
 
   ghc = library.project.pkg-set.config.ghc.package;
 
@@ -46,19 +58,23 @@ in pkgs.runCommand (name + "-coverage-report")
   })
   ''
     function markup() {
-      local srcDir=$1
+      local -n srcDs=$1
       local -n mixDs=$2
-      local -n excludedModules=$3
+      local -n includedModules=$3
       local destDir=$4
       local tixFile=$5
 
-      local hpcMarkupCmd=("hpc" "markup" "--srcdir=$srcDir" "--destdir=$destDir")
+      local hpcMarkupCmd=("hpc" "markup" "--destdir=$destDir")
+      for srcDir in "''${srcDs[@]}"; do
+        hpcMarkupCmd+=("--srcdir=$srcDir")
+      done
+
       for mixDir in "''${mixDs[@]}"; do
         hpcMarkupCmd+=("--hpcdir=$mixDir")
       done
 
-      for module in "''${excludedModules[@]}"; do
-        hpcMarkupCmd+=("--exclude=$module")
+      for module in "''${includedModules[@]}"; do
+        hpcMarkupCmd+=("--include=$module")
       done
 
       hpcMarkupCmd+=("$tixFile")
@@ -68,14 +84,14 @@ in pkgs.runCommand (name + "-coverage-report")
     }
 
     function sumTix() {
-      local -n excludedModules=$1
+      local -n includedModules=$1
       local -n tixFs=$2
       local outFile="$3"
 
       local hpcSumCmd=("hpc" "sum" "--union" "--output=$outFile")
 
-      for module in "''${excludedModules[@]}"; do
-        hpcSumCmd+=("--exclude=$module")
+      for module in "''${includedModules[@]}"; do
+        hpcSumCmd+=("--include=$module")
       done
 
       for tixFile in "''${tixFs[@]}"; do
@@ -85,6 +101,17 @@ in pkgs.runCommand (name + "-coverage-report")
       echo "''${hpcSumCmd[@]}"
       eval "''${hpcSumCmd[@]}"
     }
+
+    function discoverPackageModules() {
+      pushd $out/share/hpc/vanilla/mix/${name}
+      mapfile -d $'\0' $1 < <(find ./ -type f \
+        -wholename "*.mix" -not -name "Paths*" \
+        -exec basename {} \; \
+        | sed "s/\.mix$//" \
+        | tr "\n" "\0")
+      popd
+    }
+
 
     local mixDirs=${toBashArray mixDirs}
 
@@ -121,13 +148,19 @@ in pkgs.runCommand (name + "-coverage-report")
     # Sum tix files to create a tix file with all relevant tix
     # information and markup a HTML report from this info.
     if (( "''${#tixFiles[@]}" > 0 )); then
-      local src=${library.src.outPath}
+      local srcDirs=${toBashArray srcDirs}
       local testModules=${toBashArray testModules}
       local sumTixFile="$out/share/hpc/vanilla/tix/${name}/${name}.tix"
       local markupOutDir="$out/share/hpc/vanilla/html/${name}"
 
-      sumTix testModules tixFiles "$sumTixFile"
+      # Turn found mix files into corresponding Haskell modules and
+      # load into array
+      pkgModules=()
+      discoverPackageModules pkgModules
+      echo "Included modules: ''${pkgModules[@]}"
 
-      markup "$src" mixDirs testModules "$markupOutDir" "$sumTixFile"
+      sumTix pkgModules tixFiles "$sumTixFile"
+
+      markup srcDirs mixDirs pkgModules "$markupOutDir" "$sumTixFile"
     fi
   ''
