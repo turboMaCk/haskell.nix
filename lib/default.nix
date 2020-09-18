@@ -239,7 +239,7 @@ in {
 
   # Do coverage of a project
   projectCoverageReport = import ./cover-project.nix {
-    inherit lib haskellLib pkgs;
+    inherit stdenv lib haskellLib pkgs;
   };
 
   # Use `isCrossHost` to identify when we are cross compiling and

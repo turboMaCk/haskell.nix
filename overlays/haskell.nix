@@ -492,11 +492,8 @@ final: prev: {
                   tools = final.buildPackages.haskell-nix.tools pkg-set.config.compiler.nix-name;
                   roots = final.haskell-nix.roots pkg-set.config.compiler.nix-name;
                 };
+            in project;
 
-                packageCoverageReports = map (pkg: pkg.coverageReport) (final.lib.attrValues (haskellLib.selectProjectPackages project.hsPkgs));
-            in project // {
-              projectCoverageReport = haskellLib.projectCoverageReport packageCoverageReports;
-            };
 
         # Take `hsPkgs` from the `rawProject` and update all the packages and
         # components so they have a `.project` attribute and as well as
@@ -504,7 +501,7 @@ final: prev: {
         addProjectAndPackageAttrs = rawProject:
           final.lib.fix (project':
             let project = project' // { recurseForDerivations = false; };
-            in rawProject // {
+            in rawProject // rec {
               hsPkgs = (final.lib.mapAttrs (n: package':
                 if package' == null
                   then null
@@ -529,6 +526,8 @@ final: prev: {
                   # These are functions not packages
                   inherit (rawProject.hsPkgs) shellFor ghcWithHoogle ghcWithPackages;
               });
+
+            projectCoverageReport = haskellLib.projectCoverageReport (map (pkg: pkg.coverageReport) (final.lib.attrValues (haskellLib.selectProjectPackages hsPkgs)));
           });
 
         cabalProject =
@@ -564,11 +563,7 @@ final: prev: {
                   tools = final.buildPackages.haskell-nix.tools pkg-set.config.compiler.nix-name;
                   roots = final.haskell-nix.roots pkg-set.config.compiler.nix-name;
                 };
-
-                packageCoverageReports = map (pkg: pkg.coverageReport) (final.lib.attrValues (haskellLib.selectProjectPackages project.hsPkgs));
-            in project // {
-              projectCoverageReport = haskellLib.projectCoverageReport packageCoverageReports;
-            };
+            in project;
 
         stackProject = args: let p = stackProject' args;
             in p.hsPkgs // {

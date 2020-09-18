@@ -1,11 +1,13 @@
 # A project coverage report is a composition of package coverage
 # reports
-{ pkgs, lib, haskellLib }:
+{ stdenv, pkgs, lib, haskellLib }:
 
 # List of coverage reports to accumulate
 coverageReports:
 
 let
+  toBashArray = arr: "(" + (lib.concatStringsSep " " arr) + ")";
+
   # Create table rows for a project coverage index page that look something like:
   #
   # | Package          |
@@ -46,9 +48,61 @@ let
     then (builtins.head coverageReports).library.project.pkg-set.config.ghc.package or pkgs.ghc
     else pkgs.ghc;
 
+  libs = map (r: r.library) coverageReports;
+
+  projectLibs = map (pkg: pkg.components.library) (lib.attrValues (haskellLib.selectProjectPackages ((lib.head libs).project.hsPkgs)));
+
+  mixDirs =
+    map
+      (l: "${l}/share/hpc/vanilla/mix/${l.identifier.name}-${l.identifier.version}")
+      (projectLibs);
+
+  srcDirs = map (l: l.src.outPath) (projectLibs);
+
 in pkgs.runCommand "project-coverage-report"
-  { buildInputs = [ghc]; }
+  ({ buildInputs = [ghc];
+     LANG        = "en_US.UTF-8";
+     LC_ALL      = "en_US.UTF-8";
+  } // lib.optionalAttrs (stdenv.buildPlatform.libc == "glibc") {
+    LOCALE_ARCHIVE = "${pkgs.buildPackages.glibcLocales}/lib/locale/locale-archive";
+  })
   ''
+    function markup() {
+      local -n srcDs=$1
+      local -n mixDs=$2
+      local -n includedModules=$3
+      local destDir=$4
+      local tixFile=$5
+
+      local hpcMarkupCmd=("hpc" "markup" "--destdir=$destDir")
+      for srcDir in "''${srcDs[@]}"; do
+        hpcMarkupCmd+=("--srcdir=$srcDir")
+      done
+
+      for mixDir in "''${mixDs[@]}"; do
+        hpcMarkupCmd+=("--hpcdir=$mixDir")
+      done
+
+      for module in "''${includedModules[@]}"; do
+        hpcMarkupCmd+=("--include=$module")
+      done
+
+      hpcMarkupCmd+=("$tixFile")
+
+      echo "''${hpcMarkupCmd[@]}"
+      eval "''${hpcMarkupCmd[@]}"
+    }
+
+    function discoverPackageModules() {
+      pushd $out/share/hpc/vanilla/mix/
+      mapfile -d $'\0' $1 < <(find ./ -type f \
+        -wholename "*.mix" -not -name "Paths*" \
+        -exec basename {} \; \
+        | sed "s/\.mix$//" \
+        | tr "\n" "\0")
+      popd
+    }
+
     mkdir -p $out/share/hpc/vanilla/tix/all
     mkdir -p $out/share/hpc/vanilla/mix/
     mkdir -p $out/share/hpc/vanilla/html/
@@ -79,5 +133,16 @@ in pkgs.runCommand "project-coverage-report"
 
       # Markup a HTML coverage report for the entire project
       cp ${projectIndexHtml} $out/share/hpc/vanilla/html/index.html
+
+      local pkgModules=()
+      local markupOutDir="$out/share/hpc/vanilla/html/all"
+      local srcDirs=${toBashArray srcDirs}
+      local mixDirs=${toBashArray mixDirs}
+
+      mkdir $markupOutDir
+      discoverPackageModules pkgModules
+      echo "Included modules: ''${pkgModules[@]}"
+
+      markup srcDirs mixDirs pkgModules "$markupOutDir" "$tixFile"
     fi
   ''

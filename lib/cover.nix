@@ -126,6 +126,11 @@ in pkgs.runCommand (name + "-coverage-report")
       fi
     done
 
+    local srcDirs=${toBashArray srcDirs}
+    local pkgModules=()
+    discoverPackageModules pkgModules
+    echo "Included modules: ''${pkgModules[@]}"
+
     # Copy over tix files verbatim
     local tixFiles=()
     ${lib.concatStringsSep "\n" (builtins.map (check: ''
@@ -140,6 +145,8 @@ in pkgs.runCommand (name + "-coverage-report")
 
         tixFiles+=("$newTixFile")
 
+        markup srcDirs mixDirs pkgModules "$out/share/hpc/vanilla/html/${name}/${check.exeName}/" "$newTixFile"
+
         popd
       fi
     '') checks)
@@ -148,16 +155,12 @@ in pkgs.runCommand (name + "-coverage-report")
     # Sum tix files to create a tix file with all relevant tix
     # information and markup a HTML report from this info.
     if (( "''${#tixFiles[@]}" > 0 )); then
-      local srcDirs=${toBashArray srcDirs}
       local testModules=${toBashArray testModules}
       local sumTixFile="$out/share/hpc/vanilla/tix/${name}/${name}.tix"
       local markupOutDir="$out/share/hpc/vanilla/html/${name}"
 
       # Turn found mix files into corresponding Haskell modules and
       # load into array
-      pkgModules=()
-      discoverPackageModules pkgModules
-      echo "Included modules: ''${pkgModules[@]}"
 
       sumTix pkgModules tixFiles "$sumTixFile"
 
