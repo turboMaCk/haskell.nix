@@ -112,6 +112,16 @@ in pkgs.runCommand (name + "-coverage-report")
       popd
     }
 
+    function packageModules() {
+      pushd $out/share/hpc/vanilla/mix/${name}
+      mapfile -d $'\0' $1 < <(find ./ -type f \
+        -wholename "*${name}*/*.mix" -not -name "Paths*" \
+        -exec basename {} \; \
+        | sed "s/\.mix$//" \
+        | tr "\n" "\0")
+      popd
+    }
+
 
     local mixDirs=${toBashArray mixDirs}
 
@@ -131,6 +141,10 @@ in pkgs.runCommand (name + "-coverage-report")
     discoverPackageModules pkgModules
     echo "Included modules: ''${pkgModules[@]}"
 
+    local lessPkgModules=()
+    packageModules lessPkgModules
+    echo "Just this package modules: ''${lessPkgModules[@]}"
+
     # Copy over tix files verbatim
     local tixFiles=()
     ${lib.concatStringsSep "\n" (builtins.map (check: ''
@@ -145,7 +159,7 @@ in pkgs.runCommand (name + "-coverage-report")
 
         tixFiles+=("$newTixFile")
 
-        markup srcDirs mixDirs pkgModules "$out/share/hpc/vanilla/html/${name}/${check.exeName}/" "$newTixFile"
+        markup srcDirs mixDirs lessPkgModules "$out/share/hpc/vanilla/html/${name}/${check.exeName}/" "$newTixFile"
 
         popd
       fi
@@ -164,6 +178,6 @@ in pkgs.runCommand (name + "-coverage-report")
 
       sumTix pkgModules tixFiles "$sumTixFile"
 
-      markup srcDirs mixDirs pkgModules "$markupOutDir" "$sumTixFile"
+      markup srcDirs mixDirs lessPkgModules "$markupOutDir" "$sumTixFile"
     fi
   ''
