@@ -93,10 +93,13 @@ in pkgs.runCommand "project-coverage-report"
       eval "''${hpcMarkupCmd[@]}"
     }
 
-    function discoverPackageModules() {
-      pushd $out/share/hpc/vanilla/mix/
+    function findModules() {
+      local searchDir=$2
+      local pattern=$3
+
+      pushd $searchDir
       mapfile -d $'\0' $1 < <(find ./ -type f \
-        -wholename "*.mix" -not -name "Paths*" \
+        -wholename "$pattern" -not -name "Paths*" \
         -exec basename {} \; \
         | sed "s/\.mix$//" \
         | tr "\n" "\0")
@@ -134,15 +137,14 @@ in pkgs.runCommand "project-coverage-report"
       # Markup a HTML coverage report for the entire project
       cp ${projectIndexHtml} $out/share/hpc/vanilla/html/index.html
 
-      local pkgModules=()
       local markupOutDir="$out/share/hpc/vanilla/html/all"
       local srcDirs=${toBashArray srcDirs}
       local mixDirs=${toBashArray mixDirs}
+      local allMixModules=()
 
       mkdir $markupOutDir
-      discoverPackageModules pkgModules
-      echo "Included modules: ''${pkgModules[@]}"
+      findModules allMixModules "$out/share/hpc/vanilla/mix/" "*.mix"
 
-      markup srcDirs mixDirs pkgModules "$markupOutDir" "$tixFile"
+      markup srcDirs mixDirs allMixModules "$markupOutDir" "$tixFile"
     fi
   ''

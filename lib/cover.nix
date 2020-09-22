@@ -18,26 +18,10 @@
 let
   toBashArray = arr: "(" + (lib.concatStringsSep " " arr) + ")";
 
-  # Exclude test modules from tix file. Getting coverage information
-  # for the test modules doesn't make sense as we're interested in how
-  # much the tests covered the library, not how much the tests covered
-  # themselves.
-  #
-  # The Main module is hard-coded here because the Main module is not
-  # listed in "$test.config.modules" (the plan.nix) but must be
-  # excluded. Note that the name of the Main module file does not
-  # matter. So a line in your cabal file such as: "main-is: Spec.hs"
-  # still generates a "Main.mix" file with the contents: Mix
-  # "Spec.hs". Hence we can hardcode the name "Main" here.
-  testModules = lib.foldl' (acc: test: acc ++ test.config.modules) ["Main"] checks;
-
   mixDir = l: "${l}/share/hpc/vanilla/mix/${l.identifier.name}-${l.identifier.version}";
   mixDirs = map mixDir mixLibraries;
 
-  # Src information HPC will need
   srcDirs = map (l: l.src.outPath) mixLibraries;
-
-  ghc = library.project.pkg-set.config.ghc.package;
 
 in pkgs.runCommand (name + "-coverage-report")
   ({ buildInputs = [ ghc ];
@@ -100,20 +84,13 @@ in pkgs.runCommand (name + "-coverage-report")
       eval "''${hpcSumCmd[@]}"
     }
 
-    function discoverPackageModules() {
-      pushd $out/share/hpc/vanilla/mix/${name}
-      mapfile -d $'\0' $1 < <(find ./ -type f \
-        -wholename "*.mix" -not -name "Paths*" \
-        -exec basename {} \; \
-        | sed "s/\.mix$//" \
-        | tr "\n" "\0")
-      popd
-    }
+    function findModules() {
+      local searchDir=$2
+      local pattern=$3
 
-    function packageModules() {
-      pushd $out/share/hpc/vanilla/mix/${name}
+      pushd $searchDir
       mapfile -d $'\0' $1 < <(find ./ -type f \
-        -wholename "*${name}*/*.mix" -not -name "Paths*" \
+        -wholename "$pattern" -not -name "Paths*" \
         -exec basename {} \; \
         | sed "s/\.mix$//" \
         | tr "\n" "\0")
@@ -134,15 +111,22 @@ in pkgs.runCommand (name + "-coverage-report")
     done
 
     local srcDirs=${toBashArray srcDirs}
-    local pkgModules=()
-    discoverPackageModules pkgModules
-    echo "Included modules: ''${pkgModules[@]}"
+    local allMixModules=()
+    local pkgMixModules=()
 
-    local lessPkgModules=()
-    packageModules lessPkgModules
-    echo "Just this package modules: ''${lessPkgModules[@]}"
+    # The behaviour of stack coverage reports is to provide tix files
+    # that include coverage information for every local package, but
+    # to provide HTML reports that only include modules for the
+    # current package. We emulate the same behaviour here. If the user
+    # includes all local packages in the mix libraries argument, they
+    # will get a coverage report very similar to stack.
 
-    # Copy over tix files verbatim
+    # All mix files
+    findModules allMixModules "$out/share/hpc/vanilla/mix/${name}" "*.mix"
+    # Only mix files corresponding to this package
+    findModules pkgMixModules "$out/share/hpc/vanilla/mix/${name}" "*${name}*/*.mix"
+
+    # For each text
     local tixFiles=()
     ${lib.concatStringsSep "\n" (builtins.map (check: ''
       if [ -d "${check}/share/hpc/vanilla/tix" ]; then
@@ -152,11 +136,14 @@ in pkgs.runCommand (name + "-coverage-report")
         local newTixFile=$out/share/hpc/vanilla/tix/${name}/"$tixFile"
 
         mkdir -p "$(dirname $newTixFile)"
+        # Copy over the tix file verbatim
         cp "$tixFile" "$newTixFile"
 
+        # Add the tix file to our list
         tixFiles+=("$newTixFile")
 
-        markup srcDirs mixDirs lessPkgModules "$out/share/hpc/vanilla/html/${name}/${check.exeName}/" "$newTixFile"
+        # Create a coverage report for *just that test*
+        markup srcDirs mixDirs pkgMixModules "$out/share/hpc/vanilla/html/${name}/${check.exeName}/" "$newTixFile"
 
         popd
       fi
@@ -166,15 +153,13 @@ in pkgs.runCommand (name + "-coverage-report")
     # Sum tix files to create a tix file with all relevant tix
     # information and markup a HTML report from this info.
     if (( "''${#tixFiles[@]}" > 0 )); then
-      local testModules=${toBashArray testModules}
       local sumTixFile="$out/share/hpc/vanilla/tix/${name}/${name}.tix"
       local markupOutDir="$out/share/hpc/vanilla/html/${name}"
 
-      # Turn found mix files into corresponding Haskell modules and
-      # load into array
+      # Sum all of our tix file, including modules from any local package
+      sumTix allMixModules tixFiles "$sumTixFile"
 
-      sumTix pkgModules tixFiles "$sumTixFile"
-
-      markup srcDirs mixDirs lessPkgModules "$markupOutDir" "$sumTixFile"
+      # Markup a HTML report, included modules from only this package
+      markup srcDirs mixDirs pkgMixModules "$markupOutDir" "$sumTixFile"
     fi
   ''
