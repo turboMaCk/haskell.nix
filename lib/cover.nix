@@ -121,12 +121,12 @@ in pkgs.runCommand (name + "-coverage-report")
     # includes all local packages in the mix libraries argument, they
     # will get a coverage report very similar to stack.
 
-    # All mix files
+    # All mix modules
     findModules allMixModules "$out/share/hpc/vanilla/mix/${name}" "*.mix"
-    # Only mix files corresponding to this package
+    # Only mix modules corresponding to this package
     findModules pkgMixModules "$out/share/hpc/vanilla/mix/${name}" "*${name}*/*.mix"
 
-    # For each text
+    # For each test
     local tixFiles=()
     ${lib.concatStringsSep "\n" (builtins.map (check: ''
       if [ -d "${check}/share/hpc/vanilla/tix" ]; then
