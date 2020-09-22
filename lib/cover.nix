@@ -6,9 +6,13 @@
 , library
 # List of check derivations that generate coverage
 , checks
-# Should the tests of one local package generate coverage for another
-# local package?
-, crossPollinate ? true
+# List of other libraries to include in the coverage report. The
+# default value if just the derivation provided as the `library`
+# argument. Use a larger list of libraries if you would like the tests
+# of one local package to generate coverage for another.
+, mixLibraries ? [library]
+# hack for project-less projects
+, ghc ? library.project.pkg-set.config.ghc.package
 }:
 
 let
@@ -27,17 +31,11 @@ let
   # "Spec.hs". Hence we can hardcode the name "Main" here.
   testModules = lib.foldl' (acc: test: acc ++ test.config.modules) ["Main"] checks;
 
-  # Libraries in the project
-  projectLibs = map (pkg: pkg.components.library) (lib.attrValues (haskellLib.selectProjectPackages library.project.hsPkgs));
-
-  # Mix information HPC will need
-  mixDirs =
-    map
-      (l: "${l}/share/hpc/vanilla/mix/${l.identifier.name}-${l.identifier.version}")
-      (if crossPollinate then projectLibs else [library]);
+  mixDir = l: "${l}/share/hpc/vanilla/mix/${l.identifier.name}-${l.identifier.version}";
+  mixDirs = map mixDir mixLibraries;
 
   # Src information HPC will need
-  srcDirs = map (l: l.src.outPath) (if crossPollinate then projectLibs else [library]);
+  srcDirs = map (l: l.src.outPath) mixLibraries;
 
   ghc = library.project.pkg-set.config.ghc.package;
 
@@ -121,7 +119,6 @@ in pkgs.runCommand (name + "-coverage-report")
         | tr "\n" "\0")
       popd
     }
-
 
     local mixDirs=${toBashArray mixDirs}
 

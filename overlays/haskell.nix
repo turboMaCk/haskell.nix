@@ -515,11 +515,12 @@ final: prev: {
                       ) package'.components;
                       inherit project;
 
-                      coverageReport = haskellLib.coverageReport {
+                      coverageReport = haskellLib.coverageReport (rec {
                         name = package.identifier.name + "-" + package.identifier.version;
                         inherit (components) library;
                         checks = final.lib.filter (final.lib.isDerivation) (final.lib.attrValues package'.checks);
-                      };
+                        mixLibraries = map (pkg: pkg.components.library) (final.lib.attrValues (haskellLib.selectProjectPackages project.hsPkgs));
+                      });
                     }
                 ) rawProject.hsPkgs
                 // {
