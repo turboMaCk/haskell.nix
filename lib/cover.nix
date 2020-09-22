@@ -116,7 +116,7 @@ in pkgs.runCommand (name + "-coverage-report")
 
     # The behaviour of stack coverage reports is to provide tix files
     # that include coverage information for every local package, but
-    # to provide HTML reports that only include modules for the
+    # to provide HTML reports that only include coverage info for the
     # current package. We emulate the same behaviour here. If the user
     # includes all local packages in the mix libraries argument, they
     # will get a coverage report very similar to stack.
