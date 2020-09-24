@@ -6,7 +6,7 @@ project using Cabal's inbuilt hpc support.
 ## Prerequisites
 
 To get a sensible coverage report, you need to enable coverage on each
-of the components of your project:
+of the packages of your project:
 
 ```nix
 pkgs.haskell-nix.project {
@@ -18,7 +18,6 @@ pkgs.haskell-nix.project {
 
   modules = [{
     packages.$pkg.components.library.doCoverage = true;
-    packages.$pkg.components.tests.a-test.doCoverage = true;
   }];
 }
 ```
@@ -37,7 +36,6 @@ pkgs.haskell-nix.project {
 
   modules = pkgs.lib.optional withCoverage [{
     packages.$pkg.components.library.doCoverage = true;
-    packages.$pkg.components.tests.a-test.doCoverage = true;
   }];
 }
 ```
@@ -67,12 +65,16 @@ See the [developer coverage docs](../dev/coverage.md#project-wide-reports) for m
 
 ## Custom
 
-By default, `projectCoverageReport` generates a coverage report
-including all the packages in your project, and `coverageReport`
-generates a report for the library and all enabled tests in the
-requested package. You can modify what is included in each report by
-using the `coverageReport` and `projectCoverageReport` functions.
-These are found in the haskell.nix library:
+By default, the behaviour of the `coverageReport` attribute is to
+generate a coverage report that describes how that package affects the
+coverage of all local packages (including itself) in the project.
+
+The default behaviour of `projectCoverageReport` is to sum the
+default coverage reports (produced by the above process) of all local
+packages in the project.
+
+You can modify this behaviour by using the `coverageReport` and
+`projectCoverageReport` functions found in the haskell.nix library:
 
 ```nix
 let
@@ -91,25 +93,31 @@ let
     }];
   };
 
-  # Choose the library and tests you want included in the coverage
-  # report for a package.
-  custom$pkgACoverageReport = haskellLib.coverageReport {
+  # Generate a coverage report for $pkgA that only includes the
+  # unit-test check and only shows coverage information for $pkgA, not
+  # $pkgB.
+  custom$pkgACoverageReport = haskellLib.coverageReport rec {
     name = "$pkgA-unit-tests-only"
     inherit (project.$pkgA.components) library;
     checks = [project.$pkgA.components.checks.unit-test];
+    # Note that this is the default value of the "mixLibraries"
+    # argument and so this line isn't really necessary.
+    mixLibraries = [project.$pkgA.components.library];
   };
 
-  custom$pkgBCoverageReport = haskellLib.coverageReport {
+  custom$pkgBCoverageReport = haskellLib.coverageReport rec {
     name = "$pkgB-unit-tests-only"
     inherit (project.$pkgB.components) library;
     checks = [project.$pkgB.components.checks.unit-test];
+    mixLibraries = [project.$pkgB.components.library];
   };
-
-  # Override the coverage report for a package, and also choose which
-  # packages you want included in the coverage report.
+ 
+  # Generate a project coverage report that only includes the unit
+  # tests of the project, and only shows how each unit test effects
+  # the coverage of it's package, and not other packages in the
+  # project.
   allUnitTestsProjectReport = haskellLib.projectCoverageReport [custom$pkgACoverageReport custom$pkgBCoverageReport];
 in {
   inherit project custom$pkgACoverageReport custom$pkgBCoverageReport allUnitTestsProjectCoverageReport;
 }
-
 ```
